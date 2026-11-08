@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id), R=Math.PI/180;
 const orbitDepth=113/230,orbitUp=Math.sqrt(1-orbitDepth**2);
 const state={position:90,tilt:23.4,latitude:35,time:12};
-let playing=false,sunPlaying=false,comparing=false,last=0,sunLast=0;
+let playing=false,sunPlaying=false,comparing=false,lightComparing=false,last=0,sunLast=0;
 const fmt=x=>x.toFixed(1), clock=x=>{let m=Math.round(x*60);return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`},latText=x=>x===0?'赤道 0°':`${x>0?'北緯':'南緯'}${Math.abs(x)}°`;
 function season(){const p=state.position;return p<45||p>=315?'春分付近':p<135?'夏至付近':p<225?'秋分付近':'冬至付近'}
 function earth(x,y,r,current=false){const t=state.tilt*R,dx=Math.sin(t)*(r+12),dy=orbitUp*Math.cos(t)*(r+12);return `<g class="${current?'moving':''}"><circle cx="${x}" cy="${y}" r="${r}" fill="url(#earth)"/><path d="M${x-r*.7},${y-r*.3}q${r*.5},${-r*.6} ${r*.7},${r*.1}t${r*.6},${r*.2}l${-r*.3},${r*.6}l${-r*.5},${-r*.2}z" fill="#91bd83" opacity=".85"/><ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r*orbitDepth*Math.cos(t)}" fill="none" stroke="#d4f1d4" stroke-width="1" transform="rotate(${Math.atan2(dx,dy)/R} ${x} ${y})"/><line x1="${x-dx}" y1="${y+dy}" x2="${x+dx}" y2="${y-dy}" stroke="#d9eae4" stroke-width="2.5"/><text x="${x+dx+4}" y="${y-dy}" font-size="12" fill="#c5dcd2">N</text></g>`}
@@ -29,9 +29,22 @@ function sky(g){$('sky').setAttribute('aria-label','南が左・北が右、東�
  s+='<g transform="translate(330 245)" fill="#a9e8d8" stroke="#a9e8d8" stroke-linecap="round"><ellipse cy="4" rx="17" ry="5" opacity=".15" stroke="none"/><circle cy="-26" r="5" stroke="none"/><path d="M0 -18L0 -5M-9 -12L0 -17L9 -12M0 -5L-6 4M0 -5L6 4" stroke-width="3"/></g>';
  $('sky').innerHTML=s;
 }
-function rays(g){const a=Math.max(0,g.noon)*R,dx=100*Math.cos(a),dy=100*Math.sin(a);let s='<defs><marker id="rayArrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3 0 6" fill="none" stroke="#e7be78"/></marker></defs><line x1="30" y1="182" x2="450" y2="182" stroke="#709b84" stroke-width="4"/>';
- if(g.noon>1e-8){const spread=45/Math.sin(a),left=240-spread/2;for(let i=0;i<4;i++){const x=left+spread*i/3;s+=`<line x1="${x-dx}" y1="${182-dy}" x2="${x}" y2="182" stroke="#e7be78" stroke-width="3" marker-end="url(#rayArrow)"/>`}if(spread>330)s+=`<text x="240" y="35" text-anchor="middle" fill="#8da4bc" font-size="14">広がりは図の範囲外まで続きます</text>`;s+=`<rect x="${left-5}" y="178" width="${spread+10}" height="8" rx="3" fill="#e9b958"/>`}else s+='<text x="240" y="100" text-anchor="middle" fill="#829ab5" font-size="20">日光なし</text>';
- $('rays').innerHTML=s;
+// Equal width measured perpendicular to the rays; equal ground cells.
+function beamGeometry(alt){if(alt<=1e-8)return null;const a=alt*R,s=Math.sin(a),c=Math.cos(a),width=48,ground=202,centre=250,length=152/s;
+ return{width,ground,centre,spread:width/s,source:[centre-length*c,ground-length*s],normal:[-s,c],direction:[c,s]};}
+function beamSVG(g){const b=beamGeometry(g.noon),power=Math.max(0,Math.min(1,g.energy/100));let out='<text x="28" y="27" font-size="13" fill="#d8c39e">同じ量の光</text>';
+ if(b){const [sx,sy]=b.source,[nx,ny]=b.normal,half=b.width/2,left=b.centre-b.spread/2,right=b.centre+b.spread/2;
+ out+=`<path d="M${sx-half*nx} ${sy-half*ny}L${sx+half*nx} ${sy+half*ny}L${left} ${b.ground}L${right} ${b.ground}Z" fill="#f0cd8330"/>`;
+ for(let q=-half;q<=half;q+=8){const x=sx+q*nx,y=sy+q*ny,tx=b.centre-q/Math.sin(g.noon*R);out+=`<path d="M${x} ${y}L${tx} ${b.ground}" stroke="#edcf8e" stroke-width="1.8" opacity=".85"/>`}
+ out+=`<path d="M${left} ${b.ground}H${right}" stroke="#edcf8e" stroke-width="5"/>`;
+ if(b.spread>440)out+='<text x="472" y="48" text-anchor="end" font-size="11" fill="#849bb4">光は図の外まで広がる</text>';
+ }else out+='<text x="250" y="118" text-anchor="middle" fill="#8fa7bf" font-size="16">正午も日光が当たらない</text>';
+ for(let i=0;i<11;i++){const x=30+i*40,focus=i===5;out+=`<rect x="${x}" y="204" width="40" height="28" fill="${focus?'#8ce1cd':'#385348'}" fill-opacity="${focus?.12+.6*power:.4}" stroke="${focus?'#8ce1cd':'#69897e'}" stroke-width="${focus?3:1}"/>`}
+ out+='<path d="M250 235V246" stroke="#8ce1cd"/><text x="250" y="264" text-anchor="middle" fill="#8ce1cd" font-size="13">この1マス</text>';
+ return out;
+}
+function rays(g){$('rays').innerHTML=beamSVG(g);$('lightSingle').hidden=lightComparing;$('lightComparison').hidden=!lightComparing;$('lightScale').hidden=!lightComparing;
+ if(lightComparing){$('lightComparison').innerHTML=[[90,'夏至の位置'],[270,'冬至の位置']].map(([position,label])=>{const v=Seasons.calculate(position,state.tilt,state.latitude,12),percent=Math.round(v.energy);return `<section class="light-case"><h3>${label}<span>正午 ${fmt(v.noon)}°</span></h3><svg viewBox="0 0 500 270" role="img" aria-label="${label}の光の帯と同じ大きさのマス">${beamSVG(v)}</svg><div class="sun-meter"><div class="meter-label"><span>この1マスが受ける日光</span><strong>${percent}%</strong></div><div role="meter" aria-label="${label}の1マスの日光" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${v.energy}%"></i></div></div></section>`}).join('')}
 }
 function readings(g){const a=Math.max(0,g.noon)*R,x=42+120*Math.cos(a),y=132-120*Math.sin(a);let arc='';for(let t=0;t<=Math.max(0,g.noon);t+=.5)arc+=`${t?'L':'M'}${42+42*Math.cos(t*R)},${132-42*Math.sin(t*R)} `;
  $('angle').innerHTML=g.noon< -1e-8?'<path d="M25 62H275" stroke="#719188" stroke-width="2"/><circle cx="150" cy="110" r="9" fill="#7185a2"/><text x="150" y="155" text-anchor="middle" fill="#8da4bc" font-size="12">地平線の下</text>':`<path d="M25 132H275" stroke="#719188" stroke-width="2"/><path d="M42 132L${x} ${y}" stroke="#edcb8b" stroke-width="3"/><path d="${arc}" stroke="#edcb8b" fill="none" stroke-width="2"/><circle cx="${x}" cy="${y}" r="9" fill="${g.noon>=0?'#edcb8b':'#73849b'}"/><text x="250" y="151" font-size="11" fill="#8198b0">地平線</text>`;
@@ -45,8 +58,9 @@ function sync(){for(const k of ['position','tilt','time','latitude'])$(k).value=
 for(const k of ['position','tilt','time','latitude'])$(k).addEventListener('input',e=>{state[k]=Number(e.target.value);if(k==='latitude')$('location').value='custom';render()});
 document.querySelectorAll('[data-angle]').forEach(b=>b.addEventListener('click',()=>{state.position=Number(b.dataset.angle);sync()}));document.querySelectorAll('[data-tilt]').forEach(b=>b.addEventListener('click',()=>{state.tilt=Number(b.dataset.tilt);sync()}));$('location').addEventListener('change',e=>{if(e.target.value!=='custom'){state.latitude=Number(e.target.value);sync()}});
 function stop(){playing=false;sunPlaying=false;$('play').textContent='▶ 公転';$('play').setAttribute('aria-pressed','false');$('sunPlay').textContent='▶ １日';$('sunPlay').setAttribute('aria-pressed','false')}
-$('reset').addEventListener('click',()=>{stop();comparing=false;$('compare').setAttribute('aria-pressed','false');$('legend').hidden=true;Object.assign(state,{position:90,tilt:23.4,latitude:35,time:12});sync()});$('play').addEventListener('click',()=>{if(playing){stop();return}playing=true;last=0;$('play').textContent='Ⅱ 公転';$('play').setAttribute('aria-pressed','true');requestAnimationFrame(tick)});
+$('reset').addEventListener('click',()=>{stop();comparing=false;lightComparing=false;$('lightCompare').setAttribute('aria-pressed','false');$('compare').setAttribute('aria-pressed','false');$('legend').hidden=true;Object.assign(state,{position:90,tilt:23.4,latitude:35,time:12});sync()});$('play').addEventListener('click',()=>{if(playing){stop();return}playing=true;last=0;$('play').textContent='Ⅱ 公転';$('play').setAttribute('aria-pressed','true');requestAnimationFrame(tick)});
 function tick(t){if(!playing)return;if(last)state.position=(state.position+Math.min(t-last,100)*.012)%360;last=t;sync();requestAnimationFrame(tick)}
+$('lightCompare').addEventListener('click',()=>{lightComparing=!lightComparing;$('lightCompare').setAttribute('aria-pressed',String(lightComparing));render()});
 $('compare').addEventListener('click',()=>{comparing=!comparing;$('compare').setAttribute('aria-pressed',String(comparing));$('legend').hidden=!comparing;render()});
 $('sunPlay').addEventListener('click',()=>{if(sunPlaying){sunPlaying=false;$('sunPlay').textContent='▶ １日';$('sunPlay').setAttribute('aria-pressed','false');return}sunPlaying=true;sunLast=0;$('sunPlay').textContent='Ⅱ １日';$('sunPlay').setAttribute('aria-pressed','true');requestAnimationFrame(sunTick)});
 function sunTick(t){if(!sunPlaying)return;if(sunLast)state.time=(state.time+Math.min(t-sunLast,100)*.0015)%24;sunLast=t;sync();requestAnimationFrame(sunTick)}
