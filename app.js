@@ -35,7 +35,7 @@ function beamGeometry(alt){if(alt<=1e-8)return null;const a=alt*R,s=Math.sin(a),
 function beamSVG(g){const b=beamGeometry(g.noon),power=Math.max(0,Math.min(1,g.energy/100));let out='<text x="28" y="27" font-size="13" fill="#d8c39e">同じ量の光</text>';
  if(b){const [sx,sy]=b.source,[nx,ny]=b.normal,half=b.width/2,left=b.centre-b.spread/2,right=b.centre+b.spread/2;
  out+=`<path d="M${sx-half*nx} ${sy-half*ny}L${sx+half*nx} ${sy+half*ny}L${left} ${b.ground}L${right} ${b.ground}Z" fill="#f0cd8330"/>`;
- for(let q=-half;q<=half;q+=8){const x=sx+q*nx,y=sy+q*ny,tx=b.centre-q/Math.sin(g.noon*R);out+=`<path d="M${x} ${y}L${tx} ${b.ground}" stroke="#edcf8e" stroke-width="1.8" opacity=".85"/>`}
+ for(let q=-half;q<=half;q+=8){const x=sx+q*nx,y=sy+q*ny,tx=b.centre-q/Math.sin(g.noon*R);out+=`<path d="M${x} ${y}L${tx} ${b.ground}" stroke="#edcf8e" stroke-width="1.8" opacity=".85"/>`;const [dx,dy]=b.direction,ax=tx-32*dx,ay=b.ground-32*dy;out+=`<path d="M${ax} ${ay}L${ax-9*dx+3*nx} ${ay-9*dy+3*ny}L${ax-9*dx-3*nx} ${ay-9*dy-3*ny}Z" fill="#ffe3a3"/>`}
  out+=`<path d="M${left} ${b.ground}H${right}" stroke="#edcf8e" stroke-width="5"/>`;
  if(b.spread>440)out+='<text x="472" y="48" text-anchor="end" font-size="11" fill="#849bb4">光は図の外まで広がる</text>';
  }else out+='<text x="250" y="118" text-anchor="middle" fill="#8fa7bf" font-size="16">正午も日光が当たらない</text>';
